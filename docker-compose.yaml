@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  myapp:
+    build:
+      context: .
+      target: final
+#    ports:
+#      - "8000:8000"  # Adjust the port mapping as needed
+#    volumes:
+#      - .:/usr/src/app  # Mount the current directory to the container
+#    environment:
+#      - ENV_VAR_NAME=value  # Add any environment variables your app needs
+#    command: ["python3.13", "app.py"]  # Optional, as it's already in the Dockerfile
