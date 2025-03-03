@@ -64,4 +64,4 @@ VOLUME /usr/src/app/testcases
 
 # Set the command to run your application (replace 'src/main.py' with your main file)
 # CMD ["python3.13", "-X", "gil=0", "src/main.py"]
-CMD ["./src/billion_rows"]
+CMD ["./daemon"]
