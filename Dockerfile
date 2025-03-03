@@ -56,5 +56,12 @@ RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.
 # Use the deps stage as the final stage
 FROM deps as final
 
+# Create the testcases directory
+RUN mkdir -p /usr/src/app/testcases
+
+# Declare the volume
+VOLUME /usr/src/app/testcases
+
 # Set the command to run your application (replace 'src/main.py' with your main file)
-CMD ["python3.13", "-X", "gil=0", "src/main.py"]
+# CMD ["python3.13", "-X", "gil=0", "src/main.py"]
+CMD ["./src/billion_rows"]
