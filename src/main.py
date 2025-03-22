@@ -1,69 +1,73 @@
-import concurrent.futures
-import os 
-from collections import defaultdict
+import multiprocessing as mp
+import os
 import math
 
-NUM_THREADS = os.cpu_count()   # Use 12 threads for your 12-core processor
+NUM_WORKERS = 2  # Explicitly set for a 2-core CPU
+CHUNK_SIZE = 100_000  # Process 100k lines per batch for efficiency
 
-def round_to_infinity(x, digits=1):
-    """
-    Rounds x upward (toward +∞) to the specified number of decimal places.
-    For example:
-      round_to_infinity(-0.1500001, 1) returns -0.1
-      round_to_infinity(2.341, 1) returns 2.4
-    """
-    factor = 10 ** digits
-    return math.ceil(x * factor) / factor
+def ceil_round(value, decimals=1):
+    """Rounds a number upward (toward +∞) to IEEE 754 standard."""
+    factor = 10 ** decimals
+    return math.ceil(value * factor) / factor
 
-def process_chunk(lines):
-    """Process a chunk of lines and return a dictionary mapping cities to a list of scores."""
-    city_scores = defaultdict(list)
-    for line in lines:
-        parts = line.strip().split(";")  # Split using ";"
-        if len(parts) != 2:
-            continue  # Skip malformed lines
-        city, score = parts[0].strip(), parts[1].strip()
+def process_chunk(chunk):
+    """Processes a chunk of lines and returns aggregated city statistics."""
+    local_data = {}
+
+    for line in chunk:
         try:
-            score = float(score)  # Convert score to float
-            city_scores[city].append(score)
+            city, score_str = line.strip().split(";")
+            score = float(score_str)
         except ValueError:
-            continue  # Skip invalid numeric values
-    return city_scores
+            continue  # Skip malformed data
 
-def main(input_file_name="testcase.txt", output_file_name="output.txt"):
-    city_data = defaultdict(list)  # Dictionary to store scores grouped by city
+        if city in local_data:
+            mn, total, mx, count = local_data[city]
+            local_data[city] = (min(mn, score), total + score, max(mx, score), count + 1)
+        else:
+            local_data[city] = (score, score, score, 1)
 
-    # Read all lines from the input file using a large buffer for efficiency
-    with open(input_file_name, "r", buffering=2**20) as input_file:
-        lines = input_file.readlines()
+    return local_data
 
-    # Break the file into chunks for parallel processing
-    chunk_size = max(1, len(lines) // NUM_THREADS)
-    chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
+def process_file(input_filename="testcase.txt", output_filename="output.txt"):
+    """Efficiently processes large files in streaming mode using multiprocessing."""
+    manager = mp.Manager()
+    city_data = manager.dict()  # Shared dictionary for multiprocessing
 
-    # Process each chunk concurrently using ThreadPoolExecutor
-    with concurrent.futures.ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
-        results = executor.map(process_chunk, chunks)
+    def update_global_data(local_data):
+        """Merge local process data into global dictionary efficiently."""
+        for city, (mn, total, mx, count) in local_data.items():
+            if city in city_data:
+                old_mn, old_total, old_mx, old_count = city_data[city]
+                city_data[city] = (min(old_mn, mn), old_total + total, max(old_mx, mx), old_count + count)
+            else:
+                city_data[city] = (mn, total, mx, count)
 
-    # Aggregate results from all threads
-    for city_scores in results:
-        for city, scores in city_scores.items():
-            city_data[city].extend(scores)
+    pool = mp.Pool(NUM_WORKERS)
+    chunk = []
 
-    # Sort cities alphabetically
-    sorted_cities = sorted(city_data.keys())
+    # Stream through file line-by-line to avoid high memory usage
+    with open(input_filename, "r", buffering=2**20) as infile:
+        for line in infile:
+            chunk.append(line)
+            if len(chunk) >= CHUNK_SIZE:
+                pool.apply_async(process_chunk, (chunk,), callback=update_global_data)
+                chunk = []
 
-    # Write results to the output file using the custom rounding function
-    with open(output_file_name, "w") as output_file:
-        for city in sorted_cities:
-            if not city_data[city]:
-                continue  # Skip if no valid data for this city
-            min_score = min(city_data[city])
-            mean_score = sum(city_data[city]) / len(city_data[city])
-            max_score = max(city_data[city])
-            output_file.write(f"{city}={round_to_infinity(min_score, 1)}/"
-                              f"{round_to_infinity(mean_score, 1)}/"
-                              f"{round_to_infinity(max_score, 1)}\n")
+        if chunk:  # Process any remaining lines
+            pool.apply_async(process_chunk, (chunk,), callback=update_global_data)
+
+    pool.close()
+    pool.join()
+
+    # Write results efficiently
+    with open(output_filename, "w") as outfile:
+        for city in sorted(city_data.keys()):
+            mn, total, mx, count = city_data[city]
+            mean = total / count
+            outfile.write(f"{city}={ceil_round(mn, 1):.1f}/"
+                          f"{ceil_round(mean, 1):.1f}/"
+                          f"{ceil_round(mx, 1):.1f}\n")
 
 if __name__ == "__main__":
-    main()
+    process_file()
