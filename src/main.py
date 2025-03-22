@@ -10,7 +10,7 @@ def default_city_data():
     return [float('inf'), float('-inf'), 0.0, 0]
 
 def process_chunk(filename, start_offset, end_offset):
-    data = defaultdict(default_city_data)
+    data = {}
     with open(filename, "rb") as f:
         mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
         size = len(mm)
@@ -37,6 +37,7 @@ def process_chunk(filename, start_offset, end_offset):
         if not line:
             continue
         
+        # Split the line into city and score
         semicolon_pos = line.find(b';')
         if semicolon_pos == -1:
             continue
@@ -49,6 +50,10 @@ def process_chunk(filename, start_offset, end_offset):
         except ValueError:
             continue
         
+        # Update city data
+        if city not in data:
+            data[city] = [float('inf'), float('-inf'), 0.0, 0]
+        
         entry = data[city]
         entry[0] = min(entry[0], score)
         entry[1] = max(entry[1], score)
@@ -58,9 +63,12 @@ def process_chunk(filename, start_offset, end_offset):
     return data
 
 def merge_data(data_list):
-    final = defaultdict(default_city_data)  
+    final = {}
     for data in data_list:
         for city, stats in data.items():
+            if city not in final:
+                final[city] = [float('inf'), float('-inf'), 0.0, 0]
+            
             final_entry = final[city]
             final_entry[0] = min(final_entry[0], stats[0])
             final_entry[1] = max(final_entry[1], stats[1])
@@ -87,7 +95,7 @@ def main(input_file_name="testcase.txt", output_file_name="output.txt"):
     final_data = merge_data(results)
     
     out = []
-    for city in sorted(final_data.keys()):
+    for city in final_data.keys():  # Skip sorting for faster output
         mn, mx, total, count = final_data[city]
         avg = round_inf(total / count)
         out.append(f"{city.decode()}={round_inf(mn):.1f}/{avg:.1f}/{round_inf(mx):.1f}\n")
