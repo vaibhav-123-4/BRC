@@ -16,20 +16,22 @@ def process_chunk(filename, start_offset, end_offset):
         size = len(mm)
         
         if start_offset != 0:
-            while start_offset < size and mm[start_offset] != ord('\n'):
-                start_offset += 1
-            start_offset += 1
+            mm.seek(start_offset)
+            while mm.tell() < size and mm.read(1) != b'\n':
+                pass
+            start_offset = mm.tell()
         
-        end = end_offset
-        while end < size and mm[end] != ord('\n'):
-            end += 1
-        if end < size:
-            end += 1
+        mm.seek(end_offset)
+        while mm.tell() < size and mm.read(1) != b'\n':
+            pass
+        end_offset = mm.tell()
         
-        chunk = mm[start_offset:end]
+        mm.seek(start_offset)
+        chunk = mm.read(end_offset - start_offset)
         mm.close()
     
-    for line in chunk.split(b'\n'):
+    lines = chunk.split(b'\n')
+    for line in lines:
         if not line:
             continue
         
