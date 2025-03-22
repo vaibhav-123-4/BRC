@@ -101,8 +101,9 @@ def main(input_file_name="testcase.txt", output_file_name="output.txt"):
     final_data = merge_data(results)
     
     # Sort cities alphabetically before writing output
+    sorted_cities = sorted(final_data.keys())
     out_lines = []
-    for city in sorted(final_data.keys()):
+    for city in sorted_cities:
         mn, mx, total, count = final_data[city]
         avg = round_inf(total / count)
         out_lines.append(f"{city}={round_inf(mn):.1f}/{avg:.1f}/{round_inf(mx):.1f}\n")
