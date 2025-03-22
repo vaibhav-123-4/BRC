@@ -11,7 +11,7 @@ def process_chunk(lines, cs_lock, cs):
     local_cs = defaultdict(lambda: [float('inf'), float('-inf'), 0, 0])
     for line in lines:
         c, s = line.strip().split(";")
-        s = float(s)
+        s = float(s)       ##optimized
         stats = local_cs[c]
         stats[0] = min(stats[0], s)
         stats[1] = max(stats[1], s)
