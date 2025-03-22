@@ -112,5 +112,5 @@ def main(input_file_name="testcase.txt", output_file_name="output.txt"):
             for city, (mn, mx, total, count) in sorted(final_data.items())
         )
 # /dss
-if _name_ == "_main_":
+if __name__ == "__main__":
     main()
