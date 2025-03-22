@@ -2,49 +2,48 @@ import math
 import mmap
 import multiprocessing
 from collections import defaultdict
-from multiprocessing import shared_memory
 
 def round_inf(x):
     return math.ceil(x * 10) / 10  
 
-def process_chunk(shm_name, start_offset, end_offset, size):
-    # Attach to the shared memory block
-    shm = shared_memory.SharedMemory(name=shm_name)
-    mm = mmap.mmap(-1, size, access=mmap.ACCESS_READ, offset=0)
-    mm.write(shm.buf)
-    mm.seek(0)
+def default_city_data():
+    return [float('inf'), float('-inf'), 0.0, 0]
 
-    data = {}
-    if start_offset != 0:
-        while start_offset < size and mm[start_offset] != ord('\n'):
+def process_chunk(filename, start_offset, end_offset):
+    data = defaultdict(default_city_data)
+    with open(filename, "rb") as f:
+        mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        size = len(mm)
+        
+        if start_offset != 0:
+            while start_offset < size and mm[start_offset] != ord('\n'):
+                start_offset += 1
             start_offset += 1
-        start_offset += 1
+        
+        end = end_offset
+        while end < size and mm[end] != ord('\n'):
+            end += 1
+        if end < size:
+            end += 1
+        
+        chunk = mm[start_offset:end]
+        mm.close()
     
-    end = end_offset
-    while end < size and mm[end] != ord('\n'):
-        end += 1
-    if end < size:
-        end += 1
-    
-    chunk = mm[start_offset:end]
-    mm.close()
-
     for line in chunk.split(b'\n'):
         if not line:
             continue
         
-        parts = line.split(b';')
-        if len(parts) != 2:
+        semicolon_pos = line.find(b';')
+        if semicolon_pos == -1:
             continue
         
-        city, score_str = parts
+        city = line[:semicolon_pos]  
+        score_str = line[semicolon_pos+1:]
+        
         try:
             score = float(score_str)
         except ValueError:
             continue
-        
-        if city not in data:
-            data[city] = [float('inf'), float('-inf'), 0.0, 0]
         
         entry = data[city]
         entry[0] = min(entry[0], score)
@@ -52,16 +51,12 @@ def process_chunk(shm_name, start_offset, end_offset, size):
         entry[2] += score
         entry[3] += 1
     
-    shm.close()
     return data
 
 def merge_data(data_list):
-    final = {}
+    final = defaultdict(default_city_data)  
     for data in data_list:
         for city, stats in data.items():
-            if city not in final:
-                final[city] = [float('inf'), float('-inf'), 0.0, 0]
-            
             final_entry = final[city]
             final_entry[0] = min(final_entry[0], stats[0])
             final_entry[1] = max(final_entry[1], stats[1])
@@ -74,10 +69,6 @@ def main(input_file_name="testcase.txt", output_file_name="output.txt"):
     with open(input_file_name, "rb") as f:
         mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
         file_size = len(mm)
-        
-        # Create shared memory and copy file data
-        shm = shared_memory.SharedMemory(create=True, size=file_size)
-        shm.buf[:file_size] = mm[:file_size]
         mm.close()
     
     num_procs = multiprocessing.cpu_count() * 2  
@@ -86,11 +77,8 @@ def main(input_file_name="testcase.txt", output_file_name="output.txt"):
               for i in range(num_procs)]
     
     with multiprocessing.Pool(num_procs) as pool:
-        tasks = [(shm.name, start, end, file_size) for start, end in chunks]
+        tasks = [(input_file_name, start, end) for start, end in chunks]
         results = pool.starmap(process_chunk, tasks)
-    
-    shm.close()
-    shm.unlink()
     
     final_data = merge_data(results)
     
