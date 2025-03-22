@@ -111,6 +111,6 @@ def main(input_file_name="testcase.txt", output_file_name="output.txt"):
             f"{city.decode()}={round_inf(mn):.1f}/{round_inf(total / count):.1f}/{round_inf(mx):.1f}\n"
             for city, (mn, mx, total, count) in sorted(final_data.items())
         )
-
+# /dss
 if _name_ == "_main_":
     main()
