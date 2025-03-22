@@ -13,25 +13,27 @@ def process_chunk(filename, start_offset, end_offset):
     data = defaultdict(default_city_data)
     with open(filename, "rb") as f:
         mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-        size = len(mm)
         
+        # Adjust start offset to the beginning of the next line
         if start_offset != 0:
             mm.seek(start_offset)
-            while mm.tell() < size and mm.read(1) != b'\n':
+            while mm.tell() < end_offset and mm.read(1) != b'\n':
                 pass
             start_offset = mm.tell()
         
+        # Adjust end offset to the end of the line
         mm.seek(end_offset)
-        while mm.tell() < size and mm.read(1) != b'\n':
+        while mm.tell() < mm.size() and mm.read(1) != b'\n':
             pass
         end_offset = mm.tell()
         
+        # Read the chunk
         mm.seek(start_offset)
         chunk = mm.read(end_offset - start_offset)
         mm.close()
     
-    lines = chunk.split(b'\n')
-    for line in lines:
+    # Process lines in the chunk
+    for line in chunk.split(b'\n'):
         if not line:
             continue
         
