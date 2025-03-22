@@ -1,73 +1,69 @@
-import multiprocessing as mp
 import os
-import math
+import subprocess
 
-NUM_WORKERS = 2  # Explicitly set for a 2-core CPU
-CHUNK_SIZE = 100_000  # Process 100k lines per batch for efficiency
+# Create the Bash script content with corrected escape sequences
+bash_script_content = r"""#!/bin/bash
 
-def ceil_round(value, decimals=1):
-    """Rounds a number upward (toward +∞) to IEEE 754 standard."""
-    factor = 10 ** decimals
-    return math.ceil(value * factor) / factor
+input_file="${1:-testcase.txt}"
+output_file="${2:-output.txt}"
 
-def process_chunk(chunk):
-    """Processes a chunk of lines and returns aggregated city statistics."""
-    local_data = {}
+awk -F ';' '
+function ceil(x) {
+    return (x == int(x)) ? x : int(x) + (x > 0)
+}
+function round_up(val) {
+    scaled = val * 10
+    return ceil(scaled) / 10
+}
 
-    for line in chunk:
-        try:
-            city, score_str = line.strip().split(";")
-            score = float(score_str)
-        except ValueError:
-            continue  # Skip malformed data
+{
+    # Skip invalid lines (exactly two fields required)
+    if (NF != 2) next
+    if ($2 !~ /^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$/) next
 
-        if city in local_data:
-            mn, total, mx, count = local_data[city]
-            local_data[city] = (min(mn, score), total + score, max(mx, score), count + 1)
-        else:
-            local_data[city] = (score, score, score, 1)
+    city = $1
+    value = $2 + 0
 
-    return local_data
+    # Update statistics
+    if (city in min) {
+        if (value < min[city]) min[city] = value
+        if (value > max[city]) max[city] = value
+        sum[city] += value
+        count[city]++
+    } else {
+        min[city] = max[city] = sum[city] = value
+        count[city] = 1
+    }
+}
+END {
+    for (city in sum) {
+        avg = sum[city] / count[city]
+        printf "%s=%.1f/%.1f/%.1f\n", 
+            city, 
+            round_up(min[city]), 
+            round_up(avg), 
+            round_up(max[city])
+    }
+}' "$input_file" | sort -t '=' -k1,1 > "$output_file"
+"""
 
-def process_file(input_filename="testcase.txt", output_filename="output.txt"):
-    """Efficiently processes large files in streaming mode using multiprocessing."""
-    manager = mp.Manager()
-    city_data = manager.dict()  # Shared dictionary for multiprocessing
+script_name = "script.sh"
 
-    def update_global_data(local_data):
-        """Merge local process data into global dictionary efficiently."""
-        for city, (mn, total, mx, count) in local_data.items():
-            if city in city_data:
-                old_mn, old_total, old_mx, old_count = city_data[city]
-                city_data[city] = (min(old_mn, mn), old_total + total, max(old_mx, mx), old_count + count)
-            else:
-                city_data[city] = (mn, total, mx, count)
+try:
+    # Write the Bash script to a file with Unix-style line endings
+    with open(script_name, "w", newline="\n") as f:
+        f.write(bash_script_content)
 
-    pool = mp.Pool(NUM_WORKERS)
-    chunk = []
+    # Make the script executable
+    os.chmod(script_name, 0o755)
 
-    # Stream through file line-by-line to avoid high memory usage
-    with open(input_filename, "r", buffering=2**20) as infile:
-        for line in infile:
-            chunk.append(line)
-            if len(chunk) >= CHUNK_SIZE:
-                pool.apply_async(process_chunk, (chunk,), callback=update_global_data)
-                chunk = []
+    # Execute the script
+    subprocess.run(["bash", script_name], check=True)
 
-        if chunk:  # Process any remaining lines
-            pool.apply_async(process_chunk, (chunk,), callback=update_global_data)
-
-    pool.close()
-    pool.join()
-
-    # Write results efficiently
-    with open(output_filename, "w") as outfile:
-        for city in sorted(city_data.keys()):
-            mn, total, mx, count = city_data[city]
-            mean = total / count
-            outfile.write(f"{city}={ceil_round(mn, 1):.1f}/"
-                          f"{ceil_round(mean, 1):.1f}/"
-                          f"{ceil_round(mx, 1):.1f}\n")
-
-if __name__ == "__main__":
-    process_file()
+except subprocess.CalledProcessError as e:
+    print(f"Error executing the script: {e}")
+finally:
+    # Cleanup: Delete the script if needed
+    # pass
+    if os.path.exists(script_name):
+        os.remove(script_name)
