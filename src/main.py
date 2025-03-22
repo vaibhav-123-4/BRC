@@ -1,27 +1,22 @@
 import math
 import mmap
 import multiprocessing
-from collections import defaultdict
 
 def round_inf(x):
     return math.ceil(x * 10) / 10  
 
-def default_city_data():
-    # [min, max, total, count]
-    return [float('inf'), float('-inf'), 0.0, 0]
-
 def process_chunk(filename, start_offset, end_offset):
-    data = defaultdict(default_city_data)
+    data = {}
     with open(filename, "rb") as f:
         mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
         file_size = len(mm)
 
-        # If start_offset is already beyond the file, return empty data
+        # If start_offset is beyond the file, return empty data
         if start_offset >= file_size:
             mm.close()
             return data
 
-        # Align start_offset: if not at beginning, skip partial line
+        # Align start_offset: skip partial line
         if start_offset:
             mm.seek(start_offset)
             nl = mm.find(b'\n')
@@ -33,7 +28,7 @@ def process_chunk(filename, start_offset, end_offset):
                 mm.close()
                 return data
 
-        # Ensure end_offset does not exceed file_size
+        # Align end_offset: include the full line
         end_offset = min(end_offset, file_size)
         mm.seek(end_offset)
         nl = mm.find(b'\n')
@@ -56,7 +51,12 @@ def process_chunk(filename, start_offset, end_offset):
         except Exception:
             continue
 
-        stats = data[city]
+        # Use decoded city name as key to avoid repeated decoding
+        city_key = city.decode()
+        if city_key not in data:
+            data[city_key] = [float('inf'), float('-inf'), 0.0, 0]
+
+        stats = data[city_key]
         if score < stats[0]:
             stats[0] = score
         if score > stats[1]:
@@ -67,9 +67,12 @@ def process_chunk(filename, start_offset, end_offset):
     return data
 
 def merge_data(results):
-    final = defaultdict(default_city_data)
+    final = {}
     for data in results:
         for city, stats in data.items():
+            if city not in final:
+                final[city] = [float('inf'), float('-inf'), 0.0, 0]
+            
             fstats = final[city]
             if stats[0] < fstats[0]:
                 fstats[0] = stats[0]
@@ -97,12 +100,14 @@ def main(input_file_name="testcase.txt", output_file_name="output.txt"):
     
     final_data = merge_data(results)
     
+    # Skip sorting for faster output
     out_lines = []
-    for city in sorted(final_data.keys()):
-        mn, mx, total, count = final_data[city]
+    for city, stats in final_data.items():
+        mn, mx, total, count = stats
         avg = round_inf(total / count)
-        out_lines.append(f"{city.decode()}={round_inf(mn):.1f}/{avg:.1f}/{round_inf(mx):.1f}\n")
+        out_lines.append(f"{city}={round_inf(mn):.1f}/{avg:.1f}/{round_inf(mx):.1f}\n")
     
+    # Write output in one batch
     with open(output_file_name, "w") as f:
         f.writelines(out_lines)
 
