@@ -28,9 +28,8 @@ def process_chunk(filename, start_offset, end_offset):
         chunk = mm[start_offset:end]
         mm.close()
     
-    # Process each line in the chunk using splitlines() for speed
+    # Process each line using splitlines() for speed
     for line in chunk.splitlines():
-        # Skip empty lines
         if not line:
             continue
         
@@ -54,7 +53,6 @@ def process_chunk(filename, start_offset, end_offset):
             stats[2] += score
             stats[3] += 1
         else:
-            # Initialize [min, max, total, count]
             data[city] = [score, score, score, 1]
     
     return data
@@ -93,10 +91,10 @@ def main(input_file_name="testcase.txt", output_file_name="output.txt"):
     
     final_data = merge_data(results)
     
-    # Prepare output lines
     out = []
-    for city, stats in final_data.items():
-        mn, mx, total, count = stats
+    # Sort the output lines alphabetically by city name
+    for city in sorted(final_data.keys(), key=lambda c: c.decode()):
+        mn, mx, total, count = final_data[city]
         avg = round_inf(total / count)
         out.append(f"{city.decode()}={round_inf(mn):.1f}/{avg:.1f}/{round_inf(mx):.1f}\n")
     
